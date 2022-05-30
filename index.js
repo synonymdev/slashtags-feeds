@@ -1,4 +1,8 @@
-const SLASHTAG_NAME = 'slashtag-for-feed'
+const os = require('os')
+const path = require('path')
+
+const SLASHTAG_NAME = 'slashtags-feed-provider'
+const DEFAULT_PATH = path.join(os.homedir(), '.slashtags-feeds')
 
 module.exports = class Feeds {
   /**
@@ -24,7 +28,7 @@ module.exports = class Feeds {
     const { SDK } = await import('@synonymdev/slashtags-sdk')
     const sdk = new SDK({
       primaryKey: this._opts.key,
-      storage: this._opts.storage,
+      storage: this._opts.storage || DEFAULT_PATH,
       persist: this._opts.persist
     })
     const slashtag = sdk.slashtag({ name: SLASHTAG_NAME })
@@ -57,7 +61,9 @@ module.exports = class Feeds {
   }
 
   async _drive (userID) {
-    if (this.closed) { throw new Error('Can not create feeds after closing the SDK') }
+    if (this.closed) {
+      throw new Error('Can not create feeds after closing the SDK')
+    }
 
     const drive = await this.slashtag.drive({
       name: userID.toString(),

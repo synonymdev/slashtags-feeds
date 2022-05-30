@@ -27,7 +27,7 @@ Create a Feeds instance.
 
 - `key` A secret key of type Buffer or Uint8Array. If not passed a random key will be generated and feeds will not be persistent.
 
-- `storage` Storage directory for feeds. Defaults to `os.tmpdir() + '/.slashtags/'`
+- `storage` Storage directory for feeds. Defaults to `os.homedir() + '/.slashtags-feeds/'`
 
 #### `await feeds.feed(userID)`
 
@@ -36,3 +36,7 @@ Returns the feed `key` and `encryptionKey` for a given user, identified by any s
 #### `await feeds.update(userID, key, value)`
 
 Update a user's feed. `key` is a string, and `value` is a serializable JSON object.
+
+#### `await feeds.close()`
+
+Gracefully closing feeds and freeing IO resources.

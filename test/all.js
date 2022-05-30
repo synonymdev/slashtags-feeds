@@ -56,3 +56,24 @@ test('Basic', async (t) => {
   await feeds.close()
   await sdk.close()
 })
+
+test('deterministic keys', async (t) => {
+  const feeds = await Feeds.init({
+    key: Buffer.from('a'.repeat(64), 'hex'),
+    persist: false
+  })
+
+  const feed = await feeds.feed(123)
+  console.log(feed.key.toString('hex'))
+  console.log(feed.encryptionKey.toString('hex'))
+  t.is(
+    feed.key.toString('hex'),
+    '9f6754be8b6802a5e0459b9ef0639e7a4d4af934918e945554266294c17db3dd'
+  )
+  t.is(
+    feed.encryptionKey.toString('hex'),
+    '6070f6024af702a5c3ff2764c37a17d273074b62626eb933016b937e95258aee'
+  )
+
+  feeds.close()
+})
