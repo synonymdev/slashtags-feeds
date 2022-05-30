@@ -1,0 +1,14 @@
+{
+  "name": "@synonymdev/feeds",
+  "version": "1.0.0-alpha.0",
+  "scripts": {
+    "test": "standard --fix && node test/all.js"
+  },
+  "dependencies": {
+    "@synonymdev/slashtags-sdk": "^1.0.0-alpha.1"
+  },
+  "devDependencies": {
+    "brittle": "^2.3.1",
+    "standard": "^17.0.0"
+  }
+}
