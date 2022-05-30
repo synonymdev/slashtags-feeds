@@ -4,10 +4,10 @@ A library for managing users' feeds using Slashtags SDK.
 
 ## Usage
 
-Initiate the library using a secret key.
+Initiate the library.
 
 ```js
-const feeds = await Feeds.init({ key: process.env.SLASHTAGS_FEEDS_SECRET });
+const feeds = await Feeds.init();
 
 const userID = 1234;
 const amount = {

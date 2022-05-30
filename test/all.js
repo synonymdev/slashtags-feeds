@@ -64,8 +64,6 @@ test('deterministic keys', async (t) => {
   })
 
   const feed = await feeds.feed(123)
-  console.log(feed.key.toString('hex'))
-  console.log(feed.encryptionKey.toString('hex'))
   t.is(
     feed.key.toString('hex'),
     '9f6754be8b6802a5e0459b9ef0639e7a4d4af934918e945554266294c17db3dd'
@@ -73,6 +71,29 @@ test('deterministic keys', async (t) => {
   t.is(
     feed.encryptionKey.toString('hex'),
     '6070f6024af702a5c3ff2764c37a17d273074b62626eb933016b937e95258aee'
+  )
+
+  feeds.close()
+})
+
+test('primaryKey from storage', async (t) => {
+  const feeds = await Feeds.init({
+    storage: './test/storage'
+  })
+
+  t.is(
+    feeds.sdk.primaryKey.toString('hex'),
+    'ca7b9fa3969f4d94ba0df6a9097583834d194a6caad2e436ff1e1ecf3729782a'
+  )
+
+  const feed = await feeds.feed(123)
+  t.is(
+    feed.key.toString('hex'),
+    '08467493cbbc3b3506a8906ddcbf64aeea3f600e5de39ed364bd558a50c35f6f'
+  )
+  t.is(
+    feed.encryptionKey.toString('hex'),
+    'eb214308140bae8fa12d593ebdc83d37b619c4d17ed2d9bae93fae89a44ffab4'
   )
 
   feeds.close()

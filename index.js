@@ -1,8 +1,10 @@
 const os = require('os')
 const path = require('path')
+const fs = require('fs')
 
 const SLASHTAG_NAME = 'slashtags-feed-provider'
 const DEFAULT_PATH = path.join(os.homedir(), '.slashtags-feeds')
+const KEY_PATH = 'feeds-key'
 
 module.exports = class Feeds {
   /**
@@ -26,8 +28,11 @@ module.exports = class Feeds {
 
   async ready () {
     const { SDK } = await import('@synonymdev/slashtags-sdk')
+
+    const key = this._fromStorage()
+
     const sdk = new SDK({
-      primaryKey: this._opts.key,
+      primaryKey: key || this._opts.key,
       storage: this._opts.storage || DEFAULT_PATH,
       persist: this._opts.persist
     })
@@ -38,6 +43,8 @@ module.exports = class Feeds {
     this._key = sdk.primaryKey // If this._key was falsy
 
     await slashtag.ready()
+
+    if (!key) this._writePrimaryKey(sdk.primaryKey)
   }
 
   close () {
@@ -71,6 +78,22 @@ module.exports = class Feeds {
     })
 
     return drive
+  }
+
+  _fromStorage () {
+    try {
+      return fs.readFileSync(
+        path.join(this._opts.storage || DEFAULT_PATH, KEY_PATH)
+      )
+    } catch (error) {}
+  }
+
+  _writePrimaryKey (key) {
+    if (this._opts.persist === false) return
+    fs.writeFileSync(
+      path.join(this._opts.storage || DEFAULT_PATH, KEY_PATH),
+      key
+    )
   }
 
   /**
