@@ -1,6 +1,8 @@
 const os = require('os')
 const path = require('path')
 const fs = require('fs')
+const sodium = require('sodium-universal')
+const b4a = require('b4a')
 
 const SLASHTAG_NAME = 'slashtags-feed-provider'
 const DEFAULT_PATH = path.join(os.homedir(), '.slashtags-feeds')
@@ -12,6 +14,7 @@ module.exports = class Feeds {
    * @param {object} opts
    * @param {Uint8Array} [opts.key] Secret key
    * @param {string} [opts.storage] Storage directory
+   * @param {boolean} [opts.persist]
    */
   constructor (opts = {}) {
     this._opts = opts
@@ -53,13 +56,23 @@ module.exports = class Feeds {
   }
 
   /**
-   * Creates a feed for a user's ID if it doesn't exist.
+   * Generates a new feed id
+   * @returns {string}
+   */
+  randomID () {
+    const buf = b4a.alloc(32)
+    sodium.randombytes_buf(buf)
+    return b4a.toString(buf, 'hex')
+  }
+
+  /**
+   * Creates a feed if it doesn't exist.
    * Returns the feed key and encryptionKey.
    *
-   * @param {{toString(): string}} userID
+   * @param {string} feedID
    */
-  async feed (userID) {
-    const drive = await this._drive(userID)
+  async feed (feedID) {
+    const drive = await this._drive(feedID)
 
     return {
       key: drive.key,
@@ -67,13 +80,18 @@ module.exports = class Feeds {
     }
   }
 
-  async _drive (userID) {
+  /**
+   *
+   * @param {string} feedID
+   * @returns
+   */
+  async _drive (feedID) {
     if (this.closed) {
       throw new Error('Can not create feeds after closing the SDK')
     }
 
     const drive = await this.slashtag.drive({
-      name: userID.toString(),
+      name: feedID,
       encrypted: true
     })
 
@@ -98,17 +116,53 @@ module.exports = class Feeds {
 
   /**
    *
-   * @param {{toString(): string}} userID
+   * @param {string} feedID
    * @param {string} key
    * @param {JSON} value
    */
-  async update (userID, key, value) {
-    const drive = await this._drive(userID)
-    drive.put(key, this._encode(value))
+  async update (feedID, key, value) {
+    const drive = await this._drive(feedID)
+    return drive.put(key, this._encode(value))
+  }
+
+  /**
+   * Delete the feed from storage
+   * @param {string} feedID
+   */
+  async destroy (feedID) {
+    if (this._opts.persist === false) return
+    const drive = await this._drive(feedID)
+    return this._destroyDrive(drive)
   }
 
   _encode (value) {
     return Buffer.from(JSON.stringify(value))
+  }
+
+  _destroyDrive (drive) {
+    const cores = [drive.feed, drive.content.core]
+    return Promise.allSettled(cores.map(this._destroyCore.bind(this)))
+  }
+
+  async _destroyCore (core) {
+    const id = core.discoveryKey.toString('hex')
+
+    const dir = path.join(
+      this._opts?.storage || DEFAULT_PATH,
+      'cores',
+      id.slice(0, 2),
+      id.slice(2, 4),
+      id
+    )
+
+    return Promise.all([
+      core.close(),
+      new Promise((resolve, reject) =>
+        fs.rm(dir, { recursive: true }, (err) => {
+          err ? reject(err) : resolve()
+        })
+      )
+    ])
   }
 }
 

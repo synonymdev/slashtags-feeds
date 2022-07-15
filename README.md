@@ -1,6 +1,6 @@
 # Slashtags Feeds
 
-A library for managing users' feeds using Slashtags SDK.
+A library for managing feeds using Slashtags SDK.
 
 ## Usage
 
@@ -9,12 +9,12 @@ Initiate the library.
 ```js
 const feeds = await Feeds.init();
 
-const userID = 1234;
+const feedID = FEED.randomID();
 const amount = {
   USD: 1000,
 };
 
-await feeds.update(userID, 'balance', balance);
+await feeds.update(feedID, 'balance', balance);
 ```
 
 ## API
@@ -29,14 +29,22 @@ Create a Feeds instance.
 
 - `storage` Storage directory for feeds. Defaults to `os.homedir() + '/.slashtags-feeds/'`
 
-#### `await feeds.feed(userID)`
+#### `feeds.randomID()`
 
-Returns the feed `key` and `encryptionKey` for a given user, identified by any serializable id.
+Generate a random string id to be used as the feedID.
 
-#### `await feeds.update(userID, key, value)`
+#### `await feeds.feed(feedID)`
 
-Update a user's feed. `key` is a string, and `value` is a serializable JSON object.
+Returns the feed `key` and `encryptionKey` for a given feed, identified by any serializable id.
+
+#### `await feeds.update(feedID, key, value)`
+
+Updates a feed. `key` is a string, and `value` is a serializable JSON object.
 
 #### `await feeds.close()`
 
 Gracefully closing feeds and freeing IO resources.
+
+#### `await feeds.destroy(feedID)`
+
+Destroys all stored data for the feed.
