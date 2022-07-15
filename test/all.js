@@ -2,8 +2,12 @@ const Feeds = require('../index.js')
 const test = require('brittle')
 const fs = require('fs')
 const path = require('path')
+const os = require('os')
 
-const storage = path.join(__dirname, 'storage')
+const storage = path.join(
+  os.tmpdir(),
+  'slashtags-feeds-test' + Math.random().toString(16).slice(2)
+)
 
 test('Basic', async (t) => {
   t.plan(6)
@@ -90,6 +94,16 @@ test('deterministic keys', async (t) => {
 })
 
 test('primaryKey from storage', async (t) => {
+  await (
+    await Feeds.init({
+      storage,
+      key: Buffer.from(
+        'ca7b9fa3969f4d94ba0df6a9097583834d194a6caad2e436ff1e1ecf3729782a',
+        'hex'
+      )
+    })
+  ).close()
+
   const feeds = await Feeds.init({
     storage
   })
@@ -112,9 +126,21 @@ test('primaryKey from storage', async (t) => {
   feeds.close()
 })
 
+test('should be able to read data from feeds', async (t) => {
+  const feeds = await Feeds.init({
+    storage
+  })
+  const id = feeds.randomID()
+
+  await feeds.update(id, 'foo', 'bar')
+
+  t.is(await feeds.get(id, 'foo'), 'bar')
+
+  feeds.close()
+})
+
 test('should be able to delete a drive from storage', async (t) => {
   const feeds = await Feeds.init({
-    key: Buffer.from('f'.repeat(64), 'hex'),
     storage
   })
   const key = feeds.randomID()

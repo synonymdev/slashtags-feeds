@@ -126,6 +126,18 @@ module.exports = class Feeds {
   }
 
   /**
+   *
+   * @param {string} feedID
+   * @param {string} key
+   */
+  async get (feedID, key) {
+    const drive = await this._drive(feedID)
+    const block = await drive.get(key)
+    if (!block) return null
+    return this._decode(block)
+  }
+
+  /**
    * Delete the feed from storage
    * @param {string} feedID
    */
@@ -137,6 +149,10 @@ module.exports = class Feeds {
 
   _encode (value) {
     return Buffer.from(JSON.stringify(value))
+  }
+
+  _decode (buffer) {
+    return JSON.parse(buffer.toString())
   }
 
   _destroyDrive (drive) {
