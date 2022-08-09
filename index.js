@@ -3,56 +3,27 @@ const path = require('path')
 const fs = require('fs')
 const sodium = require('sodium-universal')
 const b4a = require('b4a')
+const Corestore = require('corestore')
+const Hyperswarm = require('hyperswarm')
+const Hyperdrive = require('hyperdrive')
 
-const SLASHTAG_NAME = 'slashtags-feed-provider'
 const DEFAULT_PATH = path.join(os.homedir(), '.slashtags-feeds')
-const KEY_PATH = 'feeds-key'
 
 module.exports = class Feeds {
   /**
    *
-   * @param {object} opts
-   * @param {Uint8Array} [opts.key] Secret key
-   * @param {string} [opts.storage] Storage directory
-   * @param {boolean} [opts.persist]
+   * @param {string} storage
    */
-  constructor (opts = {}) {
-    this._opts = opts
-  }
-
-  /**
-   * @param {ConstructorParameters<typeof Feeds>[0]} opts
-   */
-  static async init (opts = {}) {
-    const feeds = new Feeds(opts)
-    await feeds.ready()
-    return feeds
-  }
-
-  async ready () {
-    const { SDK } = await import('@synonymdev/slashtags-sdk')
-
-    const key = this._fromStorage()
-
-    const sdk = new SDK({
-      primaryKey: key || this._opts.key,
-      storage: this._opts.storage || DEFAULT_PATH,
-      persist: this._opts.persist
-    })
-    const slashtag = sdk.slashtag({ name: SLASHTAG_NAME })
-
-    this.sdk = sdk
-    this.slashtag = slashtag
-    this._key = sdk.primaryKey // If this._key was falsy
-
-    await slashtag.ready()
-
-    if (!key) this._writePrimaryKey(sdk.primaryKey)
+  constructor (storage = DEFAULT_PATH) {
+    this.corestore = new Corestore(storage)
+    this.swarm = new Hyperswarm()
+    this.swarm.on('connection', (socket) => this.corestore.replicate(socket))
+    this._storage = storage
   }
 
   close () {
-    this.closed = true
-    return this.sdk.close()
+    this.corestore.close()
+    return this.swarm.destroy()
   }
 
   /**
@@ -60,81 +31,57 @@ module.exports = class Feeds {
    * @returns {string}
    */
   randomID () {
-    const buf = b4a.alloc(32)
-    sodium.randombytes_buf(buf)
-    return b4a.toString(buf, 'hex')
+    return b4a.toString(randomBytes(), 'hex')
   }
 
   /**
    * Creates a feed if it doesn't exist.
-   * Returns the feed key and encryptionKey.
+   * Returns the drive's key and encryptionKey.
+   * It also sets up the discovery and waits till its announced as server.
    *
    * @param {string} feedID
    */
   async feed (feedID) {
     const drive = await this._drive(feedID)
+    await drive.ready()
+    await this.swarm.join(drive.discoveryKey).flushed()
 
     return {
       key: drive.key,
-      encryptionKey: drive.encryptionKey
+      encryptionKey: drive.core.encryptionKey
     }
   }
 
-  /**
-   *
-   * @param {string} feedID
-   * @returns
-   */
-  async _drive (feedID) {
-    if (this.closed) {
-      throw new Error('Can not create feeds after closing the SDK')
-    }
-
-    const drive = await this.slashtag.drive({
-      name: feedID,
-      encrypted: true
-    })
+  _drive (feedID) {
+    const namespace = this.corestore.namespace(feedID)
+    const encryptionKey = hash(namespace._namespace)
+    const drive = new Hyperdrive(namespace, { encryptionKey })
 
     return drive
   }
 
-  _fromStorage () {
-    try {
-      return fs.readFileSync(
-        path.join(this._opts.storage || DEFAULT_PATH, KEY_PATH)
-      )
-    } catch (error) {}
-  }
-
-  _writePrimaryKey (key) {
-    if (this._opts.persist === false) return
-    fs.writeFileSync(
-      path.join(this._opts.storage || DEFAULT_PATH, KEY_PATH),
-      key
-    )
-  }
-
   /**
-   *
+   * Updates an entry
    * @param {string} feedID
    * @param {string} key
-   * @param {JSON} value
+   * @param {Serializable} value
    */
   async update (feedID, key, value) {
     const drive = await this._drive(feedID)
-    return drive.put(key, this._encode(value))
+    return drive.put(key, Buffer.from(JSON.stringify(value)))
   }
 
   /**
    *
    * @param {string} feedID
    * @param {string} key
+   * @returns {Promise<Serializable | null>}
    */
   async get (feedID, key) {
     const drive = await this._drive(feedID)
     const block = await drive.get(key)
     if (!block) return null
-    return this._decode(block)
+    return JSON.parse(block.toString())
   }
 
   /**
@@ -142,29 +89,21 @@ module.exports = class Feeds {
    * @param {string} feedID
    */
   async destroy (feedID) {
-    if (this._opts.persist === false) return
     const drive = await this._drive(feedID)
+    await drive.ready()
     return this._destroyDrive(drive)
   }
 
-  _encode (value) {
-    return Buffer.from(JSON.stringify(value))
-  }
-
-  _decode (buffer) {
-    return JSON.parse(buffer.toString())
-  }
-
   _destroyDrive (drive) {
-    const cores = [drive.feed, drive.content.core]
+    const cores = [drive.core, drive.blobs.core]
     return Promise.allSettled(cores.map(this._destroyCore.bind(this)))
   }
 
   async _destroyCore (core) {
+    if (typeof this._storage !== 'string') return // Not on disk
     const id = core.discoveryKey.toString('hex')
-
     const dir = path.join(
-      this._opts?.storage || DEFAULT_PATH,
+      this._storage,
       'cores',
       id.slice(0, 2),
       id.slice(2, 4),
@@ -183,7 +122,27 @@ module.exports = class Feeds {
 }
 
 /**
- * @typedef { string | null | number | boolean } SerializableItem
- * @typedef {Array<SerializableItem> | Record<string, SerializableItem>} JSONObject
- * @typedef {SerializableItem | Array<SerializableItem | JSONObject> | Record<string, SerializableItem | JSONObject>} JSON
+ * Returns "n" number of random bytes.
+ * @param {number} n
+ * @returns
+ */
+function randomBytes (n = 32) {
+  const buf = b4a.alloc(n)
+  sodium.randombytes_buf(buf)
+  return buf
+}
+
+/**
+ * Hashes an input using Blake2b
+ * @param {Buffer} input
+ * @returns
+ */
+function hash (input) {
+  const output = b4a.alloc(32)
+  sodium.crypto_generichash(output, input)
+  return output
+}
+
+/**
+ * @typedef { string | null | number | boolean } Serializable
  */

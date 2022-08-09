@@ -3,133 +3,61 @@ const test = require('brittle')
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
+const RAM = require('random-access-memory')
+const Hyperswarm = require('hyperswarm')
+const Hyperdrive = require('Hyperdrive')
+const Corestore = require('corestore')
 
 const storage = path.join(
   os.tmpdir(),
   'slashtags-feeds-test' + Math.random().toString(16).slice(2)
 )
 
-test('Basic', async (t) => {
-  t.plan(6)
-
-  console.time('init')
-  const feeds = await Feeds.init({
-    key: Buffer.from('f'.repeat(64), 'hex'),
-    storage,
-    persist: false
-  })
-  console.timeEnd('init')
-
-  console.time('create')
-  const feed = await feeds.feed('234')
-  console.timeEnd('create')
-
-  t.ok(feed.key.length === 32)
-  t.ok(feed.encryptionKey.length === 32)
-
-  console.time('update')
-  await feeds.update('234', 'foo', 'bar')
-  console.timeEnd('update')
-
-  // Read feed
-  const { SDK } = await import('@synonymdev/slashtags-sdk')
-  const sdk = await SDK.init({ persist: false })
-  const slashtag = sdk._root
-
-  console.time('read feed')
-  const drive = await slashtag.drive(feed)
-  await drive.update()
-  console.timeEnd('read feed')
-
-  t.ok(drive.readable)
-  t.is((await drive.get('foo')).toString(), '"bar"')
-
-  await feeds.update('234', 'foo', { hello: 'world' })
-
-  const promise = new Promise((resolve) => {
-    drive.on('update', async ({ key }) => {
-      t.is(key, 'foo')
-
-      t.is(
-        (await drive.get('foo')).toString(),
-        JSON.stringify({ hello: 'world' })
-      )
-
-      resolve()
-    })
-  })
-
-  await promise
-
-  await feeds.close()
-  await sdk.close()
-})
+class EphemeralFeeds extends Feeds {
+  constructor () {
+    // @ts-ignore
+    super(() => new RAM())
+  }
+}
 
 test('generate new random key', async (t) => {
-  const feeds = new Feeds()
+  const feeds = new EphemeralFeeds()
   const key = feeds.randomID()
 
   t.is(typeof key === 'string', true)
   t.is(key.length === 64, true)
   t.is(key !== feeds.randomID(), true)
-})
-
-test('deterministic keys', async (t) => {
-  const feeds = await Feeds.init({
-    key: Buffer.from('a'.repeat(64), 'hex'),
-    persist: false
-  })
-
-  const feed = await feeds.feed('123')
-  t.is(
-    feed.key.toString('hex'),
-    '5088ab7aac2a095c5b23f56e9cbc307ac2d448a5182faaec85798544c1e06a63'
-  )
-  t.is(
-    feed.encryptionKey.toString('hex'),
-    '4dc220d6dacfeee83bd5531a4e857178bbe8fdd5416218bc03458598771c36a7'
-  )
 
   feeds.close()
 })
 
-test('primaryKey from storage', async (t) => {
-  await (
-    await Feeds.init({
-      storage,
-      key: Buffer.from(
-        'ca7b9fa3969f4d94ba0df6a9097583834d194a6caad2e436ff1e1ecf3729782a',
-        'hex'
-      )
-    })
-  ).close()
+test('deterministic keys', async (t) => {
+  const feeds = new Feeds()
 
-  const feeds = await Feeds.init({
-    storage
-  })
-
-  t.is(
-    feeds.sdk.primaryKey.toString('hex'),
-    'ca7b9fa3969f4d94ba0df6a9097583834d194a6caad2e436ff1e1ecf3729782a'
-  )
-
-  const feed = await feeds.feed('123')
+  const feed = await feeds.feed('foo')
   t.is(
     feed.key.toString('hex'),
-    '5febfab520c46022138ff0390ee2b34261cd40de438bb173c858f2203a4a6c1a'
+    '3ea919d3dd3fc7ba82d24df6a04ca972dcac66a2470e6fbea2008437072214a1'
   )
   t.is(
     feed.encryptionKey.toString('hex'),
-    '0e2146f1212346e49528799449434f248c1b7663758c5b6fcfd20e7212d8757c'
+    'b832ffb1a40310381609735b785fa56ba674fc1c6887ff0aa8e3f276f7784d50'
+  )
+  const feed2 = await feeds.feed('bar')
+  t.is(
+    feed2.key.toString('hex'),
+    'c09510a75f0296cc935b9dc3d39bda113d5d9552751722e5ce4e3d2326446173'
+  )
+  t.is(
+    feed2.encryptionKey.toString('hex'),
+    'fe4261f4db6d26357fb2c11962a8b74baf90b594647f36960d6317c77aa1c00f'
   )
 
   feeds.close()
 })
 
 test('should be able to read data from feeds', async (t) => {
-  const feeds = await Feeds.init({
-    storage
-  })
+  const feeds = new Feeds(storage)
   const id = feeds.randomID()
 
   await feeds.update(id, 'foo', 'bar')
@@ -140,27 +68,59 @@ test('should be able to read data from feeds', async (t) => {
 })
 
 test('should be able to delete a drive from storage', async (t) => {
-  const feeds = await Feeds.init({
-    storage
-  })
+  const feeds = new Feeds(storage)
   const key = feeds.randomID()
 
   const drive = await feeds._drive(key)
+  const other = await feeds._drive(feeds.randomID())
 
   await feeds.update(key, 'foo', 'bar')
   await feeds.update(key, 'foo2', 'bar2')
 
   t.is(storageExists(drive), true)
+  t.is(storageExists(other), true)
 
   await feeds.destroy(key)
 
   t.is(storageExists(drive), false)
+  t.is(storageExists(other), true)
 
   await feeds.close()
 })
 
+test('replication', async (t) => {
+  const feeds = new Feeds(storage)
+  const feed = await feeds.feed('234')
+
+  t.ok(feed.key.length === 32)
+  t.ok(feed.encryptionKey.length === 32)
+
+  await feeds.update('234', 'foo', 'bar')
+
+  // Read feed
+  const swarm = new Hyperswarm()
+  const corestore = new Corestore(RAM)
+  swarm.on('connection', (socket) => corestore.replicate(socket))
+
+  const drive = new Hyperdrive(corestore, feed.key, {
+    encryptionKey: feed.encryptionKey
+  })
+  await drive.ready()
+  swarm.join(drive.discoveryKey, { client: true, server: false })
+  const done = drive.findingPeers()
+  swarm.flush().then(done, done)
+  await drive.update()
+
+  const result = (await drive.get('foo')).toString()
+
+  t.is(result, '"bar"')
+
+  feeds.close()
+  swarm.destroy()
+})
+
 function storageExists (drive) {
-  const cores = [drive.feed, drive.content.core]
+  const cores = [drive.core, drive.blobs.core]
   return cores.every((core) => _storageExists(core))
 }
 
