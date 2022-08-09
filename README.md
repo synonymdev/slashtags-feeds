@@ -48,3 +48,17 @@ Gracefully closing feeds and freeing IO resources.
 #### `await feeds.destroy(feedID)`
 
 Destroys all stored data for the feed.
+
+## How it works
+
+As of this first version, Slashtags feeds is a directory on top of Hyperdrive with the current structure:
+
+```
+├── feed
+│   ├── foo
+│   ├── bar
+└── slashfeed.json
+```
+
+Where `slashfeed.json` defines the `name`, `image` and other future metadata about the feed.
+And `feed` directory contains the feed files, where each file represents a key value pair.

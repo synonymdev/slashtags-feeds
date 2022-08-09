@@ -10,23 +10,22 @@ const deepEqual = require('deep-equal')
 
 const DEFAULT_PATH = path.join(os.homedir(), '.slashtags-feeds')
 
-const DATA_DIR = '/data/'
-const METADATA_DIR = '/metadata/'
-
 module.exports = class Feeds {
   /**
    *
    * @param {string} storage
-   * @param {object} [opts]
-   * @param {{[name: string]: JSON}} [opts.metadata]
+   * @param {Header} [header]
    */
-  constructor (storage = DEFAULT_PATH, opts = {}) {
+  constructor (storage = DEFAULT_PATH, header = {}) {
     this.corestore = new Corestore(storage)
     this.swarm = new Hyperswarm()
     this.swarm.on('connection', (socket) => this.corestore.replicate(socket))
     this._storage = storage
-    this.metadata = opts.metadata
+    this.header = header
   }
+
+  static FEED_PREFIX = '/feed'
+  static HEADER_PATH = '/slashfeed.json'
 
   async close () {
     await this.corestore.close()
@@ -57,7 +56,7 @@ module.exports = class Feeds {
       await this.swarm.join(drive.discoveryKey).flushed()
     }
 
-    await this._ensureMetadata(drive)
+    await this._ensureHeader(drive)
 
     return {
       key: drive.key,
@@ -65,21 +64,18 @@ module.exports = class Feeds {
     }
   }
 
-  async _ensureMetadata (drive) {
-    if (!this.metadata) return
+  async _ensureHeader (drive) {
     const batch = drive.batch()
-    for (const [key, value] of [...Object.entries(this.metadata)]) {
-      const name = path.join(METADATA_DIR, key + '.json')
+    const existing = await batch.get(Feeds.HEADER_PATH).then((buf) => {
+      return buf && JSON.parse(buf.toString())
+    })
+    const skip = existing && deepEqual(existing, this.header)
+    if (skip) return batch.flush()
 
-      const existing = await batch.get(name).then((buf) => {
-        return buf && JSON.parse(buf.toString())
-      })
-
-      const skip = existing && deepEqual(existing, value)
-      if (skip) continue
-
-      await batch.put(name, Buffer.from(JSON.stringify(value)))
-    }
+    await batch.put(
+      Feeds.HEADER_PATH,
+      Buffer.from(JSON.stringify(this.header))
+    )
     await batch.flush()
   }
 
@@ -100,7 +96,7 @@ module.exports = class Feeds {
   async update (feedID, key, value) {
     const drive = await this._drive(feedID)
     return drive.put(
-      path.join(DATA_DIR, key),
+      path.join(Feeds.FEED_PREFIX, key),
       Buffer.from(JSON.stringify(value))
     )
   }
@@ -113,7 +109,7 @@ module.exports = class Feeds {
    */
   async get (feedID, key) {
     const drive = await this._drive(feedID)
-    const block = await drive.get(path.join(DATA_DIR, key))
+    const block = await drive.get(path.join(Feeds.FEED_PREFIX, key))
     if (!block) return null
     return JSON.parse(block.toString())
   }
@@ -181,4 +177,9 @@ function hash (input) {
  * @typedef { string | null | number | boolean } SerializableItem
  * @typedef {Array<SerializableItem> | Record<string, SerializableItem>} JSONObject
  * @typedef {SerializableItem | Array<SerializableItem | JSONObject> | Record<string, SerializableItem | JSONObject>} JSON
+ * @typedef {{
+ *  name?: string,
+ *  image?: string,
+ *  [key:string]: any
+ * }} Header
  */

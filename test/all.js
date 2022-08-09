@@ -111,7 +111,7 @@ test('replication', async (t) => {
   swarm.flush().then(done, done)
   await drive.update()
 
-  const result = (await drive.get('/data/foo'))?.toString()
+  const result = (await drive.get('/feed/foo'))?.toString()
 
   t.is(result, '"bar"')
 
@@ -120,58 +120,31 @@ test('replication', async (t) => {
 })
 
 test('metadata', async (t) => {
-  const metadata = {
-    profile: { foo: 'bar' },
-    schema: { foo: 42 }
-  }
-
-  const feeds = new Feeds(storage, { metadata })
+  const header = { name: 'foo' }
+  const feeds = new Feeds(storage, header)
   const key = feeds.randomID()
-
   const drive = await feeds._drive(key)
-
-  await feeds.update(key, 'foo', 'bar')
-  await feeds.update(key, 'foo2', 'bar2')
-
   await feeds.feed(key, { announce: false }) // add metadata before sharing
 
-  const savedMetadata = {}
-  const batch = drive.batch()
-  for await (const file of drive.readdir('/metadata')) {
-    const key = file.replace('.json', '')
-    const val = await batch.get('/metadata/' + file)
-    savedMetadata[key] = JSON.parse(val.toString())
-  }
-  await batch.flush()
+  const savedHeader = await drive.get('/slashfeed.json').then((buf) => {
+    return buf && JSON.parse(buf.toString())
+  })
 
-  t.is(JSON.stringify(savedMetadata), JSON.stringify(metadata))
-
+  t.is(JSON.stringify(savedHeader), JSON.stringify(header))
   await feeds.close()
 
   // Modify metadata
   {
-    const metadata = {
-      profile: { foo: 'zar' },
-      schema: { foo: 42 }
-    }
-
-    const feeds = new Feeds(storage, { metadata })
-
+    const header = { name: 'bar' }
+    const feeds = new Feeds(storage, header)
     const drive = await feeds._drive(key)
-
     await feeds.feed(key, { announce: false })
 
-    const savedMetadata = {}
-    const batch = drive.batch()
-    for await (const file of drive.readdir('/metadata')) {
-      const key = file.replace('.json', '')
-      const val = await batch.get('/metadata/' + file)
-      savedMetadata[key] = JSON.parse(val.toString())
-    }
-    await batch.flush()
+    const savedHeader = await drive.get('/slashfeed.json').then((buf) => {
+      return buf && JSON.parse(buf.toString())
+    })
 
-    t.is(JSON.stringify(savedMetadata), JSON.stringify(metadata))
-
+    t.is(JSON.stringify(savedHeader), JSON.stringify(header))
     await feeds.close()
   }
 })
