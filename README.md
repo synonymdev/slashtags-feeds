@@ -14,11 +14,15 @@ await feeds.update(feedID, 'balance', 1000);
 
 ## API
 
-#### `const feeds = new Feeds(storage)`
+#### `const feeds = new Feeds(storage, [opts])`
 
 Create a Feeds instance.
 
 `storage` Storage directory to save feeds at. Defaults to `os.homedir() + '/.slashtags-feeds/'`
+
+`opts` includes:
+
+- `metadata`: an object of metadata files to be saved along the data. example `{ schema: schema }`
 
 #### `feeds.randomID()`
 

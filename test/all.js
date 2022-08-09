@@ -64,7 +64,7 @@ test('should be able to read data from feeds', async (t) => {
 
   t.is(await feeds.get(id, 'foo'), 'bar')
 
-  feeds.close()
+  await feeds.close()
 })
 
 test('should be able to delete a drive from storage', async (t) => {
@@ -111,12 +111,69 @@ test('replication', async (t) => {
   swarm.flush().then(done, done)
   await drive.update()
 
-  const result = (await drive.get('foo')).toString()
+  const result = (await drive.get('/data/foo'))?.toString()
 
   t.is(result, '"bar"')
 
-  feeds.close()
-  swarm.destroy()
+  await feeds.close()
+  await swarm.destroy()
+})
+
+test('metadata', async (t) => {
+  const metadata = {
+    profile: { foo: 'bar' },
+    schema: { foo: 42 }
+  }
+
+  const feeds = new Feeds(storage, { metadata })
+  const key = feeds.randomID()
+
+  const drive = await feeds._drive(key)
+
+  await feeds.update(key, 'foo', 'bar')
+  await feeds.update(key, 'foo2', 'bar2')
+
+  await feeds.feed(key, { announce: false }) // add metadata before sharing
+
+  const savedMetadata = {}
+  const batch = drive.batch()
+  for await (const file of drive.readdir('/metadata')) {
+    const key = file.replace('.json', '')
+    const val = await batch.get('/metadata/' + file)
+    savedMetadata[key] = JSON.parse(val.toString())
+  }
+  await batch.flush()
+
+  t.is(JSON.stringify(savedMetadata), JSON.stringify(metadata))
+
+  await feeds.close()
+
+  // Modify metadata
+  {
+    const metadata = {
+      profile: { foo: 'zar' },
+      schema: { foo: 42 }
+    }
+
+    const feeds = new Feeds(storage, { metadata })
+
+    const drive = await feeds._drive(key)
+
+    await feeds.feed(key, { announce: false })
+
+    const savedMetadata = {}
+    const batch = drive.batch()
+    for await (const file of drive.readdir('/metadata')) {
+      const key = file.replace('.json', '')
+      const val = await batch.get('/metadata/' + file)
+      savedMetadata[key] = JSON.parse(val.toString())
+    }
+    await batch.flush()
+
+    t.is(JSON.stringify(savedMetadata), JSON.stringify(metadata))
+
+    await feeds.close()
+  }
 })
 
 function storageExists (drive) {

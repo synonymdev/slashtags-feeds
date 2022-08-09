@@ -6,23 +6,30 @@ const b4a = require('b4a')
 const Corestore = require('corestore')
 const Hyperswarm = require('hyperswarm')
 const Hyperdrive = require('hyperdrive')
+const deepEqual = require('deep-equal')
 
 const DEFAULT_PATH = path.join(os.homedir(), '.slashtags-feeds')
+
+const DATA_DIR = '/data/'
+const METADATA_DIR = '/metadata/'
 
 module.exports = class Feeds {
   /**
    *
    * @param {string} storage
+   * @param {object} [opts]
+   * @param {{[name: string]: JSON}} [opts.metadata]
    */
-  constructor (storage = DEFAULT_PATH) {
+  constructor (storage = DEFAULT_PATH, opts = {}) {
     this.corestore = new Corestore(storage)
     this.swarm = new Hyperswarm()
     this.swarm.on('connection', (socket) => this.corestore.replicate(socket))
     this._storage = storage
+    this.metadata = opts.metadata
   }
 
-  close () {
-    this.corestore.close()
+  async close () {
+    await this.corestore.close()
     return this.swarm.destroy()
   }
 
@@ -40,16 +47,40 @@ module.exports = class Feeds {
    * It also sets up the discovery and waits till its announced as server.
    *
    * @param {string} feedID
+   * @param {object} [opts]
+   * @param {boolean} [opts.announce]
    */
-  async feed (feedID) {
+  async feed (feedID, opts = {}) {
     const drive = await this._drive(feedID)
     await drive.ready()
-    await this.swarm.join(drive.discoveryKey).flushed()
+    if (opts?.announce !== false) {
+      await this.swarm.join(drive.discoveryKey).flushed()
+    }
+
+    await this._ensureMetadata(drive)
 
     return {
       key: drive.key,
       encryptionKey: drive.core.encryptionKey
     }
+  }
+
+  async _ensureMetadata (drive) {
+    if (!this.metadata) return
+    const batch = drive.batch()
+    for (const [key, value] of [...Object.entries(this.metadata)]) {
+      const name = path.join(METADATA_DIR, key + '.json')
+
+      const existing = await batch.get(name).then((buf) => {
+        return buf && JSON.parse(buf.toString())
+      })
+
+      const skip = existing && deepEqual(existing, value)
+      if (skip) continue
+
+      await batch.put(name, Buffer.from(JSON.stringify(value)))
+    }
+    await batch.flush()
   }
 
   _drive (feedID) {
@@ -64,22 +95,25 @@ module.exports = class Feeds {
    * Updates an entry
    * @param {string} feedID
    * @param {string} key
-   * @param {Serializable} value
+   * @param {SerializableItem} value
    */
   async update (feedID, key, value) {
     const drive = await this._drive(feedID)
-    return drive.put(key, Buffer.from(JSON.stringify(value)))
+    return drive.put(
+      path.join(DATA_DIR, key),
+      Buffer.from(JSON.stringify(value))
+    )
   }
 
   /**
    *
    * @param {string} feedID
    * @param {string} key
-   * @returns {Promise<Serializable | null>}
+   * @returns {Promise<SerializableItem | null>}
    */
   async get (feedID, key) {
     const drive = await this._drive(feedID)
-    const block = await drive.get(key)
+    const block = await drive.get(path.join(DATA_DIR, key))
     if (!block) return null
     return JSON.parse(block.toString())
   }
@@ -144,5 +178,7 @@ function hash (input) {
 }
 
 /**
- * @typedef { string | null | number | boolean } Serializable
+ * @typedef { string | null | number | boolean } SerializableItem
+ * @typedef {Array<SerializableItem> | Record<string, SerializableItem>} JSONObject
+ * @typedef {SerializableItem | Array<SerializableItem | JSONObject> | Record<string, SerializableItem | JSONObject>} JSON
  */
