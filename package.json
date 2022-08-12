@@ -1,6 +1,6 @@
 {
   "name": "@synonymdev/feeds",
-  "version": "1.0.0-alpha.1",
+  "version": "1.0.0-alpha.2",
   "scripts": {
     "test": "standard --fix && node test/all.js"
   },
