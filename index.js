@@ -6,7 +6,6 @@ const b4a = require('b4a')
 const Corestore = require('corestore')
 const Hyperswarm = require('hyperswarm')
 const Hyperdrive = require('hyperdrive')
-const deepEqual = require('deep-equal')
 
 const DEFAULT_PATH = path.join(os.homedir(), '.slashtags-feeds')
 
@@ -22,12 +21,19 @@ module.exports = class Feeds {
     this.swarm.on('connection', (socket) => this.corestore.replicate(socket))
     this._storage = storage
     this.header = header
+    this.drives = []
   }
 
   static FEED_PREFIX = '/feed'
   static HEADER_PATH = '/slashfeed.json'
 
   async close () {
+    // close the drives (one at a time)
+    for (let i = 0; i < this.drives.length; i += 1) {
+      await this.drives[i].hyperdrive.close()
+    }
+    this.drives = []
+
     await this.corestore.close()
     return this.swarm.destroy()
   }
@@ -56,7 +62,8 @@ module.exports = class Feeds {
       await this.swarm.join(drive.discoveryKey).flushed()
     }
 
-    await this._ensureHeader(drive)
+    const headerContent = Buffer.from(JSON.stringify(this.header))
+    await this.ensureFile(feedID, Feeds.HEADER_PATH, headerContent)
 
     return {
       key: drive.key,
@@ -64,27 +71,19 @@ module.exports = class Feeds {
     }
   }
 
-  async _ensureHeader (drive) {
-    const batch = drive.batch()
-    const existing = await batch.get(Feeds.HEADER_PATH).then((buf) => {
-      return buf && JSON.parse(buf.toString())
-    })
-    const skip = existing && deepEqual(existing, this.header)
-    if (skip) return batch.flush()
-
-    await batch.put(
-      Feeds.HEADER_PATH,
-      Buffer.from(JSON.stringify(this.header))
-    )
-    await batch.flush()
-  }
-
   _drive (feedID) {
+    const drive = this.drives.find((d) => d.feedID === feedID)
+    if (drive) {
+      return drive.hyperdrive
+    }
+
+    // don't have this one yet, make it
     const namespace = this.corestore.namespace(feedID)
     const encryptionKey = hash(namespace._namespace)
-    const drive = new Hyperdrive(namespace, { encryptionKey })
+    const hyperdrive = new Hyperdrive(namespace, { encryptionKey })
+    this.drives.push({ feedID, hyperdrive })
 
-    return drive
+    return hyperdrive
   }
 
   /**
@@ -112,6 +111,37 @@ module.exports = class Feeds {
     const block = await drive.get(path.join(Feeds.FEED_PREFIX, key))
     if (!block) return null
     return JSON.parse(block.toString())
+  }
+
+  /**
+  * Deletes an old file that is not needed any more
+  * @param {} feedID
+  * @param {*} key
+  */
+  async deleteFile (feedID, key) {
+    const drive = await this._drive(feedID)
+    await drive.del(key)
+  }
+
+  /**
+ * Ensures a file exists and writes it if missing or out of date
+ * Returns true if the file was missing and needed to be written
+ * @param {string} feedID
+ * @param {string} key
+ * @param {SerializableItem} value
+ */
+  async ensureFile (feedID, key, data) {
+    const drive = await this._drive(feedID)
+    const batch = drive.batch()
+    const existing = await batch.get(key)
+    if (existing && existing.equals(data)) {
+      await batch.flush()
+      return false
+    }
+
+    await batch.put(key, data)
+    await batch.flush()
+    return true
   }
 
   /**

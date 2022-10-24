@@ -7,10 +7,8 @@
   "dependencies": {
     "b4a": "^1.5.3",
     "corestore": "^6.0.1-alpha.19",
-    "deep-equal": "^2.0.5",
     "hyperdrive": "github:Nazeh/hyperdrive-next#pass-options",
     "hyperswarm": "^4.2.0",
-    "just-compare": "^2.2.2",
     "sodium-universal": "^3.1.0"
   },
   "devDependencies": {
