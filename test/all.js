@@ -37,7 +37,7 @@ test('deterministic keys', async (t) => {
   const feed = await feeds.feed('foo')
   t.is(
     feed.key.toString('hex'),
-    '3ea919d3dd3fc7ba82d24df6a04ca972dcac66a2470e6fbea2008437072214a1'
+    'b5fd1f1df9204f61ab6f5741a1471f14ee1541c833f2233258e4ee3f59a65dbe'
   )
   t.is(
     feed.encryptionKey.toString('hex'),
@@ -46,7 +46,7 @@ test('deterministic keys', async (t) => {
   const feed2 = await feeds.feed('bar')
   t.is(
     feed2.key.toString('hex'),
-    'c09510a75f0296cc935b9dc3d39bda113d5d9552751722e5ce4e3d2326446173'
+    '7843365d5054795fd61238f8fd1d6c534ca7abd17913705911b3a074ce45171d'
   )
   t.is(
     feed2.encryptionKey.toString('hex'),
