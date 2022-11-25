@@ -14,18 +14,29 @@ module.exports = class Feeds {
    *
    * @param {string} storage
    * @param {Header} [header]
+   * @param {any} [opts] hyperswarm options
    */
-  constructor (storage = DEFAULT_PATH, header = {}) {
+  constructor (storage = DEFAULT_PATH, header = {}, opts) {
     this.corestore = new Corestore(storage)
-    this.swarm = new Hyperswarm()
+    this.swarm = new Hyperswarm(opts)
     this.swarm.on('connection', (socket) => this.corestore.replicate(socket))
     this._storage = storage
     this.header = header
-    this.drives = []
+    this.drives = new Map()
+
+    this._opening = this._open()
   }
 
   static FEED_PREFIX = '/feed'
   static HEADER_PATH = '/slashfeed.json'
+
+  async ready () {
+    return this._opening
+  }
+
+  async _open () {
+    await this.corestore.ready()
+  }
 
   async close () {
     // close the drives (one at a time)
@@ -72,18 +83,31 @@ module.exports = class Feeds {
   }
 
   _drive (feedID) {
-    const drive = this.drives.find((d) => d.feedID === feedID)
-    if (drive) {
-      return drive.hyperdrive
-    }
+    const drive = this.drives.get(feedID)
+    if (drive) return drive
 
-    // don't have this one yet, make it
-    const namespace = this.corestore.namespace(feedID)
-    const encryptionKey = hash(namespace._namespace)
-    const hyperdrive = new Hyperdrive(namespace, { encryptionKey })
-    this.drives.push({ feedID, hyperdrive })
+    const ns = this.corestore.namespace(feedID)
+    const _preload = ns._preload.bind(ns)
+    ns._preload = (opts) => Feeds._preload.bind(this)(opts, _preload, ns._namespace)
+    const hyperdrive = new Hyperdrive(ns)
+    this.drives.set(feedID, hyperdrive)
 
     return hyperdrive
+  }
+
+  /**
+   * Adds encryption key to hypercores before Hyperdrive.ready()
+   *
+   * @param {any} opts options for creating hypercore
+   * @param {any} preload Original Corestore preload function
+   * @param {any} ns Corestore's namespace
+   */
+  static async _preload (opts, preload, ns) {
+    // Get keyPair programatically from name
+    const { from } = await preload(opts)
+    // Add encryption keys for non public drives
+    const encryptionKey = hash(ns)
+    return { from, encryptionKey }
   }
 
   /**
