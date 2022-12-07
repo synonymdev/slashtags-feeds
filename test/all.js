@@ -7,6 +7,7 @@ const RAM = require('random-access-memory')
 const Hyperswarm = require('hyperswarm')
 const Hyperdrive = require('Hyperdrive')
 const Corestore = require('corestore')
+const createTestnet = require('@hyperswarm/testnet')
 
 const storage = path.join(
   os.tmpdir(),
@@ -14,9 +15,9 @@ const storage = path.join(
 )
 
 class EphemeralFeeds extends Feeds {
-  constructor () {
+  constructor (opts) {
     // @ts-ignore
-    super(() => new RAM())
+    super(() => new RAM(), {}, opts)
   }
 }
 
@@ -35,23 +36,11 @@ test('deterministic keys', async (t) => {
   const feeds = new Feeds('./test/storage')
 
   const feed = await feeds.feed('foo')
-  t.is(
-    feed.key.toString('hex'),
-    'd763d136c006b7bb84c35ea2783064c2c3d027b36893f2759c83a82fb736ab49'
-  )
-  t.is(
-    feed.encryptionKey.toString('hex'),
-    'b832ffb1a40310381609735b785fa56ba674fc1c6887ff0aa8e3f276f7784d50'
-  )
+  t.snapshot(feed.key.toString('hex'))
+  t.snapshot(feed.encryptionKey.toString('hex'))
   const feed2 = await feeds.feed('bar')
-  t.is(
-    feed2.key.toString('hex'),
-    '0b47f8e70f47e2d843e071bedb5b57cd6ba1b588390113f18110c2bd67ca6257'
-  )
-  t.is(
-    feed2.encryptionKey.toString('hex'),
-    'fe4261f4db6d26357fb2c11962a8b74baf90b594647f36960d6317c77aa1c00f'
-  )
+  t.snapshot(feed2.key.toString('hex'))
+  t.snapshot(feed2.encryptionKey.toString('hex'))
 
   feeds.close()
 })
@@ -89,7 +78,8 @@ test('should be able to delete a drive from storage', async (t) => {
 })
 
 test('replication', async (t) => {
-  const feeds = new Feeds(storage)
+  const testnet = await createTestnet(3, t.teardown)
+  const feeds = new EphemeralFeeds(testnet)
   const feed = await feeds.feed('234')
 
   t.ok(feed.key.length === 32)
@@ -98,14 +88,21 @@ test('replication', async (t) => {
   await feeds.update('234', 'foo', 'bar')
 
   // Read feed
-  const swarm = new Hyperswarm()
+  const swarm = new Hyperswarm(testnet)
   const corestore = new Corestore(RAM)
   swarm.on('connection', (socket) => corestore.replicate(socket))
 
-  const drive = new Hyperdrive(corestore, feed.key, {
-    encryptionKey: feed.encryptionKey
-  })
+  const _preload = corestore._preload.bind(corestore)
+  corestore._preload = (opts) => _customPreload.bind(this)(opts, _preload, feed.encryptionKey)
+
+  async function _customPreload (opts, preload, encryptionKey) {
+    const { from } = await preload(opts)
+    return { from, encryptionKey }
+  }
+
+  const drive = new Hyperdrive(corestore, feed.key)
   await drive.ready()
+
   swarm.join(drive.discoveryKey, { client: true, server: false })
   const done = drive.findingPeers()
   swarm.flush().then(done, done)
