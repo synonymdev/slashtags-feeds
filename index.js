@@ -39,12 +39,7 @@ module.exports = class Feeds {
   }
 
   async close () {
-    // close the drives (one at a time)
-    for (let i = 0; i < this.drives.length; i += 1) {
-      await this.drives[i].hyperdrive.close()
-    }
-    this.drives = []
-
+    for (const drive of this.drives.values()) await drive.close()
     await this.corestore.close()
     return this.swarm.destroy()
   }
@@ -91,6 +86,7 @@ module.exports = class Feeds {
     ns._preload = (opts) => Feeds._preload.bind(this)(opts, _preload, ns._namespace)
     const hyperdrive = new Hyperdrive(ns)
     this.drives.set(feedID, hyperdrive)
+    hyperdrive.on('close', () => this.drives.delete(feedID))
 
     return hyperdrive
   }

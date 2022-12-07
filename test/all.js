@@ -38,7 +38,7 @@ test('deterministic keys', async (t) => {
   const feed = await feeds.feed('foo')
   t.is(
     feed.key.toString('hex'),
-    'f2587ef2946a2fa22066d60ffd8d009433296eb51f835b321b82577cd83e6f4b'
+    'd763d136c006b7bb84c35ea2783064c2c3d027b36893f2759c83a82fb736ab49'
   )
   t.is(
     feed.encryptionKey.toString('hex'),
@@ -47,7 +47,7 @@ test('deterministic keys', async (t) => {
   const feed2 = await feeds.feed('bar')
   t.is(
     feed2.key.toString('hex'),
-    '383fe74e9282cfad6eed5a2f948cd939b695f922493d9388cd68be36f0a3e0b3'
+    '0b47f8e70f47e2d843e071bedb5b57cd6ba1b588390113f18110c2bd67ca6257'
   )
   t.is(
     feed2.encryptionKey.toString('hex'),
@@ -156,6 +156,23 @@ test('metadata', async (t) => {
     t.is(JSON.stringify(savedHeader), JSON.stringify(header))
     await feeds.close()
   }
+})
+
+test('deduplicate drives', async (t) => {
+  const feeds = new EphemeralFeeds()
+
+  const a = feeds._drive('foo')
+  const b = feeds._drive('foo')
+
+  t.is(a, b)
+
+  const c = feeds._drive('bar')
+  t.is(feeds.drives.size, 2) // create new drive
+  await c.close()
+  t.is(feeds.drives.size, 1, 'should remove drive frome feeds.drives after close')
+
+  await feeds.close()
+  t.is(feeds.drives.size, 0, 'should remove all drives after close')
 })
 
 function storageExists (drive) {

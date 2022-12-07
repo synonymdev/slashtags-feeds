@@ -1,13 +1,13 @@
 {
   "name": "@synonymdev/feeds",
-  "version": "1.0.0-alpha.4",
+  "version": "1.0.0-alpha.5",
   "scripts": {
     "test": "standard --fix && node test/all.js"
   },
   "dependencies": {
     "@hyperswarm/testnet": "^3.1.0",
     "b4a": "^1.5.3",
-    "corestore": "^6.0.1-alpha.19",
+    "corestore": "^6.2.0",
     "hyperdrive": "^11.0.0-alpha.9",
     "hyperswarm": "^4.2.0",
     "sodium-universal": "^3.1.0"
