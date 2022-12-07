@@ -36,23 +36,11 @@ test('deterministic keys', async (t) => {
   const feeds = new Feeds('./test/storage')
 
   const feed = await feeds.feed('foo')
-  t.is(
-    feed.key.toString('hex'),
-    'd763d136c006b7bb84c35ea2783064c2c3d027b36893f2759c83a82fb736ab49'
-  )
-  t.is(
-    feed.encryptionKey.toString('hex'),
-    'b832ffb1a40310381609735b785fa56ba674fc1c6887ff0aa8e3f276f7784d50'
-  )
+  t.snapshot(feed.key.toString('hex'))
+  t.snapshot(feed.encryptionKey.toString('hex'))
   const feed2 = await feeds.feed('bar')
-  t.is(
-    feed2.key.toString('hex'),
-    '0b47f8e70f47e2d843e071bedb5b57cd6ba1b588390113f18110c2bd67ca6257'
-  )
-  t.is(
-    feed2.encryptionKey.toString('hex'),
-    'fe4261f4db6d26357fb2c11962a8b74baf90b594647f36960d6317c77aa1c00f'
-  )
+  t.snapshot(feed2.key.toString('hex'))
+  t.snapshot(feed2.encryptionKey.toString('hex'))
 
   feeds.close()
 })
