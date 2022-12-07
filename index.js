@@ -21,19 +21,14 @@ module.exports = class Feeds {
     this.swarm.on('connection', (socket) => this.corestore.replicate(socket))
     this._storage = storage
     this.header = header
-    this.drives = []
+    this.drives = new Map()
   }
 
   static FEED_PREFIX = '/feed'
   static HEADER_PATH = '/slashfeed.json'
 
   async close () {
-    // close the drives (one at a time)
-    for (let i = 0; i < this.drives.length; i += 1) {
-      await this.drives[i].hyperdrive.close()
-    }
-    this.drives = []
-
+    for (const drive of this.drives.values()) await drive.close()
     await this.corestore.close()
     return this.swarm.destroy()
   }
@@ -59,7 +54,7 @@ module.exports = class Feeds {
     const drive = await this._drive(feedID)
     await drive.ready()
     if (opts?.announce !== false) {
-      await this.swarm.join(drive.discoveryKey).flushed()
+      await this.swarm.join(drive.discoveryKey, { server: true, client: false }).flushed()
     }
 
     const headerContent = Buffer.from(JSON.stringify(this.header))
@@ -72,16 +67,14 @@ module.exports = class Feeds {
   }
 
   _drive (feedID) {
-    const drive = this.drives.find((d) => d.feedID === feedID)
-    if (drive) {
-      return drive.hyperdrive
-    }
+    if (this.drives.has(feedID)) return this.drives.get(feedID)
 
-    // don't have this one yet, make it
     const namespace = this.corestore.namespace(feedID)
     const encryptionKey = hash(namespace._namespace)
     const hyperdrive = new Hyperdrive(namespace, { encryptionKey })
-    this.drives.push({ feedID, hyperdrive })
+
+    this.drives.set(feedID, hyperdrive)
+    hyperdrive.on('close', () => this.drives.delete(feedID))
 
     return hyperdrive
   }
