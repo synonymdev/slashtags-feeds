@@ -110,27 +110,36 @@ module.exports = class Feeds {
    * Updates an entry
    * @param {string} feedID
    * @param {string} key
-   * @param {SerializableItem} value
+   * @param {Uint8Array | string} value - Uint8Array or a utf8 string
    */
   async update (feedID, key, value) {
     const drive = await this._drive(feedID)
     return drive.put(
       path.join(Feeds.FEED_PREFIX, key),
-      Buffer.from(JSON.stringify(value))
+      Feeds._encode(value)
     )
+  }
+
+  /** @deprecated */
+  static _oldEncode (value) {
+    return Buffer.from(JSON.stringify(value))
+  }
+
+  static _encode (value) {
+    return b4a.from(value)
   }
 
   /**
    *
    * @param {string} feedID
    * @param {string} key
-   * @returns {Promise<SerializableItem | null>}
+   * @returns {Promise<Uint8Array | null>}
    */
   async get (feedID, key) {
     const drive = await this._drive(feedID)
     const block = await drive.get(path.join(Feeds.FEED_PREFIX, key))
     if (!block) return null
-    return JSON.parse(block.toString())
+    return block
   }
 
   /**
@@ -148,7 +157,7 @@ module.exports = class Feeds {
  * Returns true if the file was missing and needed to be written
  * @param {string} feedID
  * @param {string} key
- * @param {SerializableItem} value
+ * @param {Uint8Array | string} value - Uint8Array or a utf8 string
  */
   async ensureFile (feedID, key, data) {
     const drive = await this._drive(feedID)
@@ -159,7 +168,7 @@ module.exports = class Feeds {
       return false
     }
 
-    await batch.put(key, data)
+    await batch.put(key, Feeds._encode(data))
     await batch.flush()
     return true
   }
@@ -224,9 +233,6 @@ function hash (input) {
 }
 
 /**
- * @typedef { string | null | number | boolean } SerializableItem
- * @typedef {Array<SerializableItem> | Record<string, SerializableItem>} JSONObject
- * @typedef {SerializableItem | Array<SerializableItem | JSONObject> | Record<string, SerializableItem | JSONObject>} JSON
  * @typedef {{
  *  name?: string,
  *  image?: string,
