@@ -2,17 +2,29 @@
 
 A library for creating and managing feeds using Hyperdrive and Hyperswarm.
 
+## Installation
+
+```sh
+npm install @synonymdev/feeds
+```
+
 ## Usage
 
-Initiate the library.
-
+### Example
 ```js
+import Feeds from '@synonymdev/feeds'
+
 const feeds = new Feeds();
 const feedID = feeds.randomID();
 await feeds.update(feedID, 'balance', 1000);
+
+let get = await feeds.get(feedID, 'foo')
+console.log(get)
+
+feeds.close()
 ```
 
-## API
+### API
 
 #### `const feeds = new Feeds(storage, [opts])`
 
@@ -26,7 +38,7 @@ Create a Feeds instance.
 
 #### `feeds.randomID()`
 
-Generate a random string id to be used as the feedID.
+Generate a random string id good for using as the feedID.
 
 #### `await feeds.feed(feedID)`
 
@@ -49,7 +61,7 @@ Gracefully closing feeds and freeing IO resources.
 
 Destroys all stored data for the feed.
 
-## How it works
+### How it works
 
 As of this first version, Slashtags feeds is a directory on top of Hyperdrive with the current structure:
 
