@@ -9,7 +9,7 @@
     "b4a": "^1.5.3",
     "corestore": "^6.2.0",
     "hyperdrive": "^11.0.0-alpha.9",
-    "hyperswarm": "^4.2.0",
+    "hyperswarm": "^4.3.0",
     "sodium-universal": "^3.1.0"
   },
   "devDependencies": {
