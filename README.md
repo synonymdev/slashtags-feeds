@@ -35,11 +35,11 @@ It awaits until the feed is announced on the swarm.
 
 #### `await feeds.update(feedID, key, value)`
 
-Updates a feed. `key` is a string, and `value` is a serializable JSON object.
+Updates a feed. `key` is a string, and `value` is Uint8Array or a utf-8 string.
 
 #### `await feeds.get(feedID, key)`
 
-Returns a value from a feed.
+Returns a Uint8Array value from a feed.
 
 #### `await feeds.close()`
 

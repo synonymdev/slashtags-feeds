@@ -8,6 +8,7 @@ const Hyperswarm = require('hyperswarm')
 const Hyperdrive = require('Hyperdrive')
 const Corestore = require('corestore')
 const createTestnet = require('@hyperswarm/testnet')
+const b4a = require('b4a')
 
 const storage = path.join(
   os.tmpdir(),
@@ -51,7 +52,19 @@ test('should be able to read data from feeds', async (t) => {
 
   await feeds.update(id, 'foo', 'bar')
 
-  t.is(await feeds.get(id, 'foo'), 'bar')
+  t.alike(await feeds.get(id, 'foo'), b4a.from('bar'))
+
+  await feeds.close()
+})
+
+test('ensureFile', async (t) => {
+  const feeds = new Feeds(storage)
+  await feeds.ready()
+  const id = feeds.randomID()
+
+  await feeds.ensureFile(id, Feeds.FEED_PREFIX + '/foo', 'bar')
+
+  t.alike(await feeds.get(id, 'foo'), b4a.from('bar'))
 
   await feeds.close()
 })
@@ -110,7 +123,7 @@ test('replication', async (t) => {
 
   const result = (await drive.get('/feed/foo'))?.toString()
 
-  t.is(result, '"bar"')
+  t.is(result, 'bar')
 
   await feeds.close()
   await swarm.destroy()
@@ -162,6 +175,34 @@ test('deduplicate drives', async (t) => {
   await feeds.close()
   t.is(feeds.drives.size, 0, 'should remove all drives after close')
 })
+
+test('encoding - old', (t) => {
+  const string = 'Foo'
+  const encodedString = Feeds._oldEncode(string)
+  t.is(oldDecoder(encodedString), `"${string}"`, 'decode strings')
+
+  const number = 42
+  const encodedNumber = Feeds._oldEncode(number)
+  t.is(oldDecoder(encodedNumber), `${number}`, 'decode number')
+
+  const json = { foo: 'bar' }
+  const encodedJson = Feeds._oldEncode(json)
+  t.is(oldDecoder(encodedJson), JSON.stringify(json), 'decode json')
+})
+
+test('encoding - new', (t) => {
+  const string = 'Foo'
+  const encodedString = Feeds._encode(string)
+  t.is(oldDecoder(encodedString), string, 'decode strings')
+
+  const uint = 'Foo'
+  const encodedUint = Feeds._encode(b4a.from(uint))
+  t.is(oldDecoder(encodedUint), uint, 'decode Uint')
+})
+
+function oldDecoder (buf) {
+  return buf && b4a.toString(buf).slice(0, 35)
+}
 
 function storageExists (drive) {
   const cores = [drive.core, drive.blobs.core]
