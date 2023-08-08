@@ -7,58 +7,65 @@ A library for creating and managing feeds using Hyperdrive and Hyperswarm.
 Initiate the library.
 
 ```js
-const feeds = new Feeds();
-const feedID = feeds.randomID();
-await feeds.update(feedID, 'balance', 1000);
+const Client = require('@synonymdev/web-relay/client')
+const fs = require('fs')
+
+const icon = fs.readFileSync('./icon.png')
+
+const client = new Client({ storage: '/path/to/storage', relay: 'https://example.com' })
+
+const config = {
+  name: 'price-feed'
+  description: 'a price feed',
+  icons: {
+      "32": "icon.png"
+  },
+  type: 'price-feed',
+  version: '1.0.0',
+  fields:[
+    {
+      name: "latest",
+      description?: 'Bitcoin / US Dollar price history',
+      main: '/feed/BTCUSD-last',
+    }
+  ] 
+}
+
+const feed = new Feed(client, config, { icon });
+
+feed.ready().then(() =>{
+ // Wait for config file to be saved
+})
+
+feed.put('/feed/BTCUSD-last', 1000000)
 ```
 
 ## API
 
-#### `const feeds = new Feeds(storage, [opts])`
+#### `const feed = new Feed(client, config, [opts])`
 
-Create a Feeds instance.
+Create a Feed instance.
 
-`storage` Storage directory to save feeds at. Defaults to `os.homedir() + '/.slashtags-feeds/'`
+`client` is a [web-relay](https://github.com/slashtags/web-relay) client
+
+`config` is a feed config file to be saved at `./slashfeed.json`
 
 `opts` includes:
 
-- `metadata`: an object of metadata files to be saved along the data. example `{ schema: schema }`
+- `icon`: an optional icon data as Uint8Array
 
-#### `feeds.randomID()`
+### `const url = await feed.createURL([path])`
 
-Generate a random string id to be used as the feedID.
+Creates a `slashfeed:` url. If `path` is not set to a specific file, it returns the url to the feed directory
 
-#### `await feeds.feed(feedID)`
+#### `await feeds.put(key, value)`
 
-Returns the feed `key` and `encryptionKey` for a given feed, identified by any serializable id.
-It awaits until the feed is announced on the swarm.
+Updates a feed. `key` is a string, and `value` is Uint8Array, a utf-8 string or a JSON.
 
-#### `await feeds.update(feedID, key, value)`
+#### `await feeds.get(key)`
 
-Updates a feed. `key` is a string, and `value` is Uint8Array or a utf-8 string.
-
-#### `await feeds.get(feedID, key)`
-
-Returns a Uint8Array value from a feed.
+Returns a Uint8Array value from a the local feed.
 
 #### `await feeds.close()`
 
-Gracefully closing feeds and freeing IO resources.
-
-#### `await feeds.destroy(feedID)`
-
-Destroys all stored data for the feed.
-
-## How it works
-
-As of this first version, Slashtags feeds is a directory on top of Hyperdrive with the current structure:
-
-```
-├── feed
-│   ├── foo
-│   ├── bar
-└── slashfeed.json
-```
-
-Where `slashfeed.json` defines the `name`, `image` and other future metadata about the feed.
-And `feed` directory contains the feed files, where each file represents a key value pair.
+Gracefully closing feeds and the underlying client.

@@ -1,241 +1,146 @@
-const os = require('os')
-const path = require('path')
-const fs = require('fs')
-const sodium = require('sodium-universal')
 const b4a = require('b4a')
-const Corestore = require('corestore')
-const Hyperswarm = require('hyperswarm')
-const Hyperdrive = require('hyperdrive')
 
-const DEFAULT_PATH = path.join(os.homedir(), '.slashtags-feeds')
+const CONFIG_PATH = '/slashfeed.json'
 
-module.exports = class Feeds {
+class Feed {
   /**
-   *
-   * @param {string} storage
-   * @param {Header} [header]
-   * @param {any} [opts] hyperswarm options
+   * @param {WebRelayClient} client
+   * @param {Config} config
+   * @param {object} [opts]
+   * @param {Uint8Array} [opts.icon]
    */
-  constructor (storage = DEFAULT_PATH, header = {}, opts) {
-    this.corestore = new Corestore(storage)
-    this.swarm = new Hyperswarm(opts)
-    this.swarm.on('connection', (socket) => this.corestore.replicate(socket))
-    this._storage = storage
-    this.header = header
-    this.drives = new Map()
+  constructor (client, config, opts = {}) {
+    this._client = client
+    this._dir = config.name
 
-    this._opening = this._open()
+    if (!this._client) throw new Error('Missing client')
+    if (!this._dir) throw new Error('Missing feed name')
+
+    this._opened = this._saveConfig(config, opts.icon)
   }
 
-  static FEED_PREFIX = '/feed'
-  static HEADER_PATH = '/slashfeed.json'
+  /**
+   * @param {string} path - path to the file in this feed
+   */
+  async createURL (path = '') {
+    const url = await this._client.createURL(this._normalizePath(path))
+    return url.replace('slash:', 'slashfeed:')
+  }
 
   async ready () {
-    return this._opening
-  }
-
-  async _open () {
-    await this.corestore.ready()
-  }
-
-  async close () {
-    for (const drive of this.drives.values()) await drive.close()
-    await this.corestore.close()
-    return this.swarm.destroy()
+    return this._opened
   }
 
   /**
-   * Generates a new feed id
-   * @returns {string}
+   * @param {string} path
    */
-  randomID () {
-    return b4a.toString(randomBytes(), 'hex')
+  _normalizePath (path) {
+    path = path.startsWith('/') ? path : '/' + path
+    return this._dir + path
   }
 
   /**
-   * Creates a feed if it doesn't exist.
-   * Returns the drive's key and encryptionKey.
-   * It also sets up the discovery and waits till its announced as server.
+   * Ensures that a config file `/slashfee.json` exists or creates it if not.
    *
-   * @param {string} feedID
-   * @param {object} [opts]
-   * @param {boolean} [opts.announce]
+   * @param {Config} [config]
+   * @param {Uint8Array} [icon]
    */
-  async feed (feedID, opts = {}) {
-    const drive = await this._drive(feedID)
-    await drive.ready()
-    if (opts?.announce !== false) {
-      await this.swarm.join(drive.discoveryKey, { server: true, client: false }).flushed()
-    }
+  async _saveConfig (config, icon) {
+    if (!config) return
+    const iconPath = (config.icons && Object.values(config.icons)[0]) || 'default'
 
-    const headerContent = Buffer.from(JSON.stringify(this.header))
-    await this.ensureFile(feedID, Feeds.HEADER_PATH, headerContent)
-
-    return {
-      key: drive.key,
-      encryptionKey: drive.core.encryptionKey
-    }
-  }
-
-  _drive (feedID) {
-    const drive = this.drives.get(feedID)
-    if (drive) return drive
-
-    const ns = this.corestore.namespace(feedID)
-    const _preload = ns._preload.bind(ns)
-    ns._preload = (opts) => Feeds._preload.bind(this)(opts, _preload, ns._namespace)
-    const hyperdrive = new Hyperdrive(ns)
-    this.drives.set(feedID, hyperdrive)
-    hyperdrive.on('close', () => this.drives.delete(feedID))
-
-    return hyperdrive
+    return Promise.all([
+      this._client.put(this._normalizePath(CONFIG_PATH), Feed._encode(config)),
+      icon && this._client.put(this._normalizePath(iconPath), icon)
+    ])
   }
 
   /**
-   * Adds encryption key to hypercores before Hyperdrive.ready()
+   * Creates or updates an entry in the feed directory
    *
-   * @param {any} opts options for creating hypercore
-   * @param {any} preload Original Corestore preload function
-   * @param {any} ns Corestore's namespace
-   */
-  static async _preload (opts, preload, ns) {
-    // Get keyPair programatically from name
-    const { from } = await preload(opts)
-    // Add encryption keys for non public drives
-    const encryptionKey = hash(ns)
-    return { from, encryptionKey }
-  }
-
-  /**
-   * Updates an entry
-   * @param {string} feedID
-   * @param {string} key
+   * @param {string} path
    * @param {Uint8Array | string} value - Uint8Array or a utf8 string
    */
-  async update (feedID, key, value) {
-    const drive = await this._drive(feedID)
-    return drive.put(
-      path.join(Feeds.FEED_PREFIX, key),
-      Feeds._encode(value)
+  async put (path, value) {
+    return this._client.put(
+      this._normalizePath(path),
+      Feed._encode(value)
     )
   }
 
-  /** @deprecated */
-  static _oldEncode (value) {
-    return Buffer.from(JSON.stringify(value))
+  /**
+   * Read local data
+   *
+   * @param {string} path
+   * @returns {Promise<Uint8Array | null>}
+   */
+  async get (path) {
+    return this._client.get(this._normalizePath(path))
   }
 
+  /**
+  * Deletes an entry in the feed directory
+  *
+  * @param {string} path
+  * @returns {Promise<void>}
+  */
+  async del (path) {
+    return this._client.del(this._normalizePath(path))
+  }
+
+  async close () {
+    return this._client.close()
+  }
+
+  /**
+   * Encode a value into a buffer assuming it is a utf8 string or JSON
+   *
+   * @param {string | object} value
+   */
   static _encode (value) {
+    if (typeof value !== 'string' && !b4a.isBuffer(value)) {
+      try {
+        // Assume it is a JSON
+        value = JSON.stringify(value)
+      } catch { }
+    }
+
     return b4a.from(value)
   }
 
   /**
+   * Decode a value from a buffer assuming it is a utf8 string or JSON
    *
-   * @param {string} feedID
-   * @param {string} key
-   * @returns {Promise<Uint8Array | null>}
+   * @param {Uint8Array} value
    */
-  async get (feedID, key) {
-    const drive = await this._drive(feedID)
-    const block = await drive.get(path.join(Feeds.FEED_PREFIX, key))
-    if (!block) return null
-    return block
-  }
+  static _decode (value) {
+    const string = b4a.toString(value)
 
-  /**
-  * Deletes an old file that is not needed any more
-  * @param {} feedID
-  * @param {*} key
-  */
-  async deleteFile (feedID, key) {
-    const drive = await this._drive(feedID)
-    await drive.del(key)
-  }
+    try {
+      return JSON.parse(string)
+    } catch { }
 
-  /**
- * Ensures a file exists and writes it if missing or out of date
- * Returns true if the file was missing and needed to be written
- * @param {string} feedID
- * @param {string} key
- * @param {Uint8Array | string} value - Uint8Array or a utf8 string
- */
-  async ensureFile (feedID, key, data) {
-    const drive = await this._drive(feedID)
-    const batch = drive.batch()
-    const existing = await batch.get(key)
-    if (existing && existing.equals(data)) {
-      await batch.flush()
-      return false
-    }
-
-    await batch.put(key, Feeds._encode(data))
-    await batch.flush()
-    return true
-  }
-
-  /**
-   * Delete the feed from storage
-   * @param {string} feedID
-   */
-  async destroy (feedID) {
-    const drive = await this._drive(feedID)
-    await drive.ready()
-    return this._destroyDrive(drive)
-  }
-
-  _destroyDrive (drive) {
-    const cores = [drive.core, drive.blobs.core]
-    return Promise.allSettled(cores.map(this._destroyCore.bind(this)))
-  }
-
-  async _destroyCore (core) {
-    if (typeof this._storage !== 'string') return // Not on disk
-    const id = core.discoveryKey.toString('hex')
-    const dir = path.join(
-      this._storage,
-      'cores',
-      id.slice(0, 2),
-      id.slice(2, 4),
-      id
-    )
-
-    return Promise.all([
-      core.close(),
-      new Promise((resolve, reject) =>
-        fs.rm(dir, { recursive: true }, (err) => {
-          err ? reject(err) : resolve()
-        })
-      )
-    ])
+    return string
   }
 }
 
-/**
- * Returns "n" number of random bytes.
- * @param {number} n
- * @returns
- */
-function randomBytes (n = 32) {
-  const buf = b4a.alloc(n)
-  sodium.randombytes_buf(buf)
-  return buf
-}
+module.exports = Feed
 
 /**
- * Hashes an input using Blake2b
- * @param {Buffer} input
- * @returns
- */
-function hash (input) {
-  const output = b4a.alloc(32)
-  sodium.crypto_generichash(output, input)
-  return output
-}
-
-/**
+ * @typedef {import('@synonymdev/web-relay/types/lib/client/index')} WebRelayClient
  * @typedef {{
- *  name?: string,
- *  image?: string,
- *  [key:string]: any
- * }} Header
+ *  name: string,
+ *  description?: string,
+ *  icons?: { [size: string]: string },
+ *  type?: string,
+ *  version?: string,
+ *  fields?: Array<{
+ *    name: string,
+ *    description?: "Bitcoin / US Dollar price history",
+ *    main: "/feed/BTCUSD-last",
+ *    files?: { [name: string]: string },
+ *    [key: string]: any
+ *  }>
+ *  [key: string]: any
+ * }} Config
  */
