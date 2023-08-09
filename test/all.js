@@ -7,6 +7,7 @@ const Client = require('@synonymdev/web-relay/client')
 const Relay = require('@synonymdev/web-relay')
 
 const Feed = require('../index.js')
+const Reader = require('../lib/reader.js')
 
 test('save slashfeed.json config on initialization', async (t) => {
   const icon = b4a.from('icon data')
@@ -53,19 +54,20 @@ test('fetch from relay', async (t) => {
   const relay = new Relay(tmpdir())
   const address = await relay.listen()
 
+  const config = { name: 'price-feed' }
+
   const writerClient = new Client({ storage: tmpdir(), relay: address })
-  const feed = new Feed(writerClient, { name: 'price-feed' })
+  const feed = new Feed(writerClient, config)
 
   await feed.put('foo', 'bar')
 
-  const url = await feed.createURL('foo')
-    .then(url => url.replace('slashfeed:', 'slash:'))
-
-  const reader = new Client({ storage: tmpdir() })
+  const readerClient = new Client({ storage: tmpdir() })
+  const reader = new Reader(readerClient, feed.url)
 
   await sleep(100)
 
-  t.alike(await reader.get(url), b4a.from('bar'))
+  t.alike(await reader.getConfig(), config)
+  t.alike(await reader.getField('foo'), 'bar')
 
   relay.close()
 })

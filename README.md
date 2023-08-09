@@ -4,40 +4,59 @@ A library for creating and managing feeds using Hyperdrive and Hyperswarm.
 
 ## Usage
 
-Initiate the library.
-
 ```js
+const Relay = require('@synonymdev/web-relay')
 const Client = require('@synonymdev/web-relay/client')
-const fs = require('fs')
+const path = require("path")
 
-const icon = fs.readFileSync('./icon.png')
+const Feed = require("@synonymdev/feeds")
+const Reader = require("@synonymdev/feeds/reader")
 
-const client = new Client({ storage: '/path/to/storage', relay: 'https://example.com' })
+const relay = new Relay(path.join(__dirname, '/storage/relay'));
 
-const config = {
-  name: 'price-feed'
-  description: 'a price feed',
-  icons: {
+(async () => {
+  const relayAddress = await relay.listen()
+
+  const client = new Client({ storage: path.join(__dirname, '/storage/writer'), relay: relayAddress })
+
+  const icon = Buffer.from('icon-data')
+
+  const config = {
+    name: 'price-feed',
+    description: 'a price feed',
+    icons: {
       "32": "icon.png"
-  },
-  type: 'price-feed',
-  version: '1.0.0',
-  fields:[
-    {
-      name: "latest",
-      description?: 'Bitcoin / US Dollar price history',
-      main: '/feed/BTCUSD-last',
-    }
-  ] 
-}
+    },
+    type: 'price-feed',
+    version: '1.0.0',
+    fields: [
+      {
+        name: "latest",
+        description: 'Bitcoin / US Dollar price history',
+        main: '/feed/BTCUSD-last',
+      }
+    ]
+  }
 
-const feed = new Feed(client, config, { icon });
+  const feed = new Feed(client, config, { icon });
+  // Wait for config file to be saved
+  await feed.ready()
 
-feed.ready().then(() =>{
- // Wait for config file to be saved
-})
+  // may need to wait more for a the relay to get the files from the client in production.
+  // await new Promise(resolve => settimeout(resolve, 200))
 
-feed.put('/feed/BTCUSD-last', 1000000)
+  feed.put('BTCUSD-last', 1000000);
+
+  {
+    const client = new Client({ storage: path.join(__dirname, '/storage/reader') })
+    const reader = new Reader(client, feed.url)
+
+    console.log("Config:", await reader.getConfig())
+    console.log("BTCUSD-last", await reader.getField('BTCUSD-last'))
+  }
+
+  relay.close()
+})()
 ```
 
 ## API
@@ -54,9 +73,9 @@ Create a Feed instance.
 
 - `icon`: an optional icon data as Uint8Array
 
-### `const url = await feed.createURL([path])`
+### `const url = feed.url`
 
-Creates a `slashfeed:` url. If `path` is not set to a specific file, it returns the url to the feed directory
+The feed's url in the format `slashfeed:<client.id>/<feed-name>/[?query]`
 
 #### `await feeds.put(key, value)`
 
@@ -69,3 +88,35 @@ Returns a Uint8Array value from a the local feed.
 #### `await feeds.close()`
 
 Gracefully closing feeds and the underlying client.
+
+#### `const reader = new Reader(client, url)`
+
+Create an instance of the helper `Reader` class.
+
+`client` is a [web-relay](https://github.com/slashtags/web-relay) client
+
+`url` is a feed url `feed.url`
+
+#### `const config = await reader.getConfig()`
+
+Returns the `slashfeed.json` configuration file.
+
+#### `const value = await reader.getField(fieldName, [decode])`
+
+Returns the value of a specific field.
+
+`decode` is an opitonal funciton that expects a `Uint8Array` and returns the decoded value.
+
+## How it works
+
+As of this first version, Slashtags feeds is a directory with the current structure:
+
+```
+├── feed
+│   ├── foo
+│   ├── bar
+└── slashfeed.json
+```
+
+Where `slashfeed.json` defines the `name`, `image` and other future metadata about the feed.
+And `feed` directory contains the feed files, where each file represents a key value pair.
