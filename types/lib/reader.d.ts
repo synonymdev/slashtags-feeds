@@ -21,6 +21,7 @@ declare class Reader {
     };
     _config: any;
     _createURL(path: any): string;
+    get config(): any;
     /**
      * @returns {Promise<Config | null>}
      */
@@ -30,12 +31,29 @@ declare class Reader {
      *
      * @template T
      *
-     * @param {string} key
+     * @param {string} name
      * @param {(buf: Uint8Array) => T} [decode]
      *
      * @returns {Promise<T | null>}
      */
-    getField<T>(key: string, decode?: (buf: Uint8Array) => T): Promise<T>;
+    getField<T>(name: string, decode?: (buf: Uint8Array) => T): Promise<T>;
+    /**
+     * Subscribe to a field
+     *
+     * @template T
+     *
+     * @param {string} name
+     * @param {(value: any) => any} [onupdate]
+     * @param {(buf: Uint8Array) => T} [decode]
+     *
+     * @returns {() => void} unsubscribe function
+     */
+    subscribe<T_1>(name: string, onupdate?: (value: any) => any, decode?: (buf: Uint8Array) => T_1): () => void;
+    /**
+     * @param {string} name
+     * @returns {string}
+     */
+    _fieldUrl(name: string): string;
 }
 declare namespace Reader {
     export { WebRelayClient, Config };

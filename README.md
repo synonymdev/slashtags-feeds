@@ -99,13 +99,20 @@ Create an instance of the helper `Reader` class.
 
 #### `const config = await reader.getConfig()`
 
-Returns the `slashfeed.json` configuration file.
+Returns the `slashfeed.json` configuration file, and sets the `reader.config` value. Internally this method gets called as soon as you initialize the Reader instance.
 
 #### `const value = await reader.getField(fieldName, [decode])`
 
 Returns the value of a specific field.
 
 `decode` is an opitonal funciton that expects a `Uint8Array` and returns the decoded value.
+
+#### `await reader.subscribe(fieldName, onupdate, [decode])`
+
+Returns the value of a specific field.
+
+`onupdate(value: T) => any` is a callback function that gets the decoded value as an argument.
+`decode(buf:Uint8Array) => T` is an opitonal funciton that expects a `Uint8Array` and returns the decoded value.
 
 ## How it works
 
