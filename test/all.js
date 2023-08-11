@@ -2,13 +2,9 @@ const test = require('brittle')
 const os = require('os')
 const path = require('path')
 const b4a = require('b4a')
-/** @type {typeof import('@synonymdev/web-relay/types/lib/client/index')} */
-// @ts-ignore
-const Client = require('@synonymdev/web-relay/client')
-const Relay = require('@synonymdev/web-relay')
+const { Client, Relay } = require('@synonymdev/web-relay')
 
-const Feed = require('../index.js')
-const Reader = require('../lib/reader.js')
+const { Feed, Reader } = require('../index.js')
 
 test('Writer - save slashfeed.json config on initialization', async (t) => {
   const icon = b4a.from('icon data')

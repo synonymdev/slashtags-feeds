@@ -1,9 +1,7 @@
-const Relay = require('@synonymdev/web-relay')
-const Client = require('@synonymdev/web-relay/client')
+const { Client, Relay } = require('@synonymdev/web-relay')
 const path = require('path')
 
-const Feed = require('@synonymdev/feeds')
-const Reader = require('@synonymdev/feeds/reader')
+const { Feed, Reader } = require('../../')
 
 const relay = new Relay(path.join(__dirname, '/storage/relay'));
 
