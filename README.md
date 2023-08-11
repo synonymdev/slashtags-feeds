@@ -89,6 +89,14 @@ Returns a Uint8Array value from a the local feed.
 
 Gracefully closing feeds and the underlying client.
 
+#### `const buffer = Feed.encode(value)`
+
+Encodes a value (string, number, null, boolean, array, or object) as JSON and return a Uint8Array
+
+#### `const value = Feed.dcode(buffer)`
+
+Decodes a Uint8Array as JSON if possible, or return the Uint8Array itself.
+
 #### `const reader = new Reader(client, url)`
 
 Create an instance of the helper `Reader` class.

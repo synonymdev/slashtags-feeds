@@ -1,17 +1,18 @@
 export = Feed;
 declare class Feed {
     /**
-     * Encode a value into a buffer assuming it is a utf8 string or JSON
+     * Encode a serializable into a Uint8Array
      *
-     * @param {string | object} value
+     * @param {string | number | null | boolean | Array | Object | Uint8Array} value
+     * @returns {Uint8Array}
      */
-    static _encode(value: string | object): any;
+    static encode(value: string | number | null | boolean | any[] | any | Uint8Array): Uint8Array;
     /**
      * Decode a value from a buffer assuming it is a utf8 string or JSON
      *
-     * @param {Uint8Array} value
+     * @param {Uint8Array | string} value
      */
-    static _decode(value: Uint8Array): any;
+    static decode(value: Uint8Array | string): any;
     /**
      * @param {WebRelayClient} client
      * @param {Config} config

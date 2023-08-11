@@ -22,7 +22,7 @@ test('Writer - save slashfeed.json config on initialization', async (t) => {
     await writer.ready()
 
     const savedConfig = await writerClient.get('/price-feed/slashfeed.json')
-    t.alike(Feed._decode(savedConfig), config)
+    t.alike(Feed.decode(savedConfig), config)
 
     const savedIcon = await writerClient.get('/price-feed/icon.png')
     t.alike(savedIcon, icon)
@@ -35,7 +35,7 @@ test('Writer - save slashfeed.json config on initialization', async (t) => {
     await writer.ready()
 
     const savedConfig = await writerClient.get('/price-feed/slashfeed.json')
-    t.alike(Feed._decode(savedConfig), config)
+    t.alike(Feed.decode(savedConfig), config)
 
     const savedIcon = await writerClient.get('/price-feed/icon.png')
     t.alike(savedIcon, icon)
@@ -48,7 +48,7 @@ test('Writer - local put & get', async (t) => {
 
   await writer.put('foo', 'bar')
 
-  t.alike(await writer.get('foo'), b4a.from('bar'))
+  t.alike(Feed.decode(await writer.get('foo')), 'bar')
 })
 
 test('Reader - fetch from relay', async (t) => {
@@ -102,13 +102,32 @@ test('Reader - subscribe', async (t) => {
   unsubscribe()
 })
 
+test('encode - decode', async (t) => {
+  const values = [
+    // raw
+    new Uint8Array([232, 242, 253]),
+    'hello world',
+    '42',
+    42,
+    ['hello world', 42, { foo: 'bar' }],
+    { foo: 'bar', array: [1, 2, '3', null] },
+    null
+  ]
+
+  for (const value of values) {
+    const encoded = Feed.encode(value)
+    const decoded = Feed.decode(encoded)
+    t.alike(decoded, value)
+  }
+})
+
 function tmpdir () {
   return path.join(os.tmpdir(), Math.random().toString(16).slice(2))
 }
 
 /**
- * @param {number} ms
- */
+   * @param {number} ms
+   */
 function sleep (ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
