@@ -55,7 +55,8 @@ test('Reader - fetch from relay', async (t) => {
   const relay = new Relay(tmpdir())
   const address = await relay.listen()
 
-  const config = { name: 'price-feed' }
+  // Handle spaes in feed names
+  const config = { name: 'price feed 😇' }
 
   const writerClient = new Client({ storage: tmpdir(), relay: address })
   const feed = new Feed(writerClient, config)
