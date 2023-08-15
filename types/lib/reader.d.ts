@@ -20,8 +20,17 @@ declare class Reader {
         };
     };
     _config: any;
-    _createURL(path: any): string;
+    /**
+     * @param {string} path
+     */
+    _createURL(path: string): string;
     get config(): any;
+    /**
+     * Returns the icon data of the feed if it exists.
+     *
+     * @param {string} [size]
+     */
+    getIcon(size?: string): Promise<Uint8Array>;
     /**
      * @returns {Promise<Config | null>}
      */

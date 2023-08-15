@@ -52,10 +52,11 @@ test('Reader - fetch from relay', async (t) => {
   const address = await relay.listen()
 
   // Handle spaes in feed names
-  const config = { name: 'price feed 😇' }
+  const icon = b4a.from('icon data')
+  const config = { name: 'price feed 😇', icons: { 48: 'icon.png' } }
 
   const writerClient = new Client({ storage: tmpdir(), relay: address })
-  const feed = new Feed(writerClient, config)
+  const feed = new Feed(writerClient, config, { icon })
 
   await feed.put('foo', 'bar')
 
@@ -65,6 +66,7 @@ test('Reader - fetch from relay', async (t) => {
   await sleep(100)
 
   t.alike(await reader.getConfig(), config)
+  t.alike(await reader.getIcon(), icon)
   t.alike(reader.config, config)
   t.alike(await reader.getField('foo'), 'bar')
 

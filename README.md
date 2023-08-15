@@ -107,6 +107,10 @@ Create an instance of the helper `Reader` class.
 
 Returns the `slashfeed.json` configuration file, and sets the `reader.config` value. Internally this method gets called as soon as you initialize the Reader instance.
 
+#### `const iconData = await reader.getIcon([size])`
+
+Returns the data buffer of the feed icon if it exists. `size` is an optional input to choose icon size to fetch, by default it will return the first size in the `config.icons`.
+
 #### `const value = await reader.getField(fieldName, [decode])`
 
 Returns the value of a specific field.
