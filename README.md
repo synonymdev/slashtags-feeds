@@ -40,6 +40,8 @@ const relay = new Relay(path.join(__dirname, '/storage/relay'));
   // Wait for config file to be saved
   await feed.ready()
 
+  confsole.log(feed.config.fields.map(f => f.main)) //  ["/feed/BTCUSD-last"]
+
   // may need to wait more for a the relay to get the files from the client in production.
   // await new Promise(resolve => settimeout(resolve, 200))
 
@@ -74,6 +76,10 @@ Create a Feed instance.
 ### `const url = feed.url`
 
 The feed's url in the format `slashfeed:<client.id>/<feed-name>/[?query]`
+
+### `await feed.ready()`
+
+Await to fetch and populate `feed.config` and `feed.icon`.
 
 #### `await feeds.put(key, value)`
 

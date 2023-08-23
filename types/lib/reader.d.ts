@@ -19,12 +19,20 @@ declare class Reader {
             [k: string]: string | boolean;
         };
     };
-    _config: any;
+    /** @type {Config |null} */
+    _config: Config | null;
+    /** @type {Uint8Array |null} */
+    _icon: Uint8Array | null;
+    /**
+     * Await the resolution of slashfeed.json configuration and other metadata.
+     */
+    ready(): Promise<void>;
     /**
      * @param {string} path
      */
     _createURL(path: string): string;
-    get config(): any;
+    get config(): Feed.Config;
+    get icon(): Uint8Array;
     /**
      * Returns the icon data of the feed if it exists.
      *
@@ -68,5 +76,6 @@ declare namespace Reader {
     export { WebRelayClient, Config };
 }
 type Config = import('./writer').Config;
+import Feed = require("./writer.js");
 type WebRelayClient = import('@synonymdev/web-relay/types/lib/client/index');
 //# sourceMappingURL=reader.d.ts.map

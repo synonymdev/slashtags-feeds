@@ -65,9 +65,10 @@ test('Reader - fetch from relay', async (t) => {
 
   await sleep(100)
 
-  t.alike(await reader.getConfig(), config)
-  t.alike(await reader.getIcon(), icon)
+  await reader.ready()
+
   t.alike(reader.config, config)
+  t.alike(reader.icon, icon)
   t.alike(await reader.getField('foo'), 'bar')
 
   relay.close()
@@ -117,6 +118,25 @@ test('encode - decode', async (t) => {
     const decoded = Feed.decode(encoded)
     t.alike(decoded, value)
   }
+})
+
+test('missing slashfeed.json', async (t) => {
+  // Handle spaes in feed names
+  const icon = b4a.from('icon data')
+  const config = { name: 'price feed 😇', icons: { 48: 'icon.png' } }
+
+  const writerClient = new Client({ storage: tmpdir() })
+  const feed = new Feed(writerClient, config, { icon })
+
+  await feed.put('foo', 'bar')
+
+  const readerClient = new Client({ storage: tmpdir() })
+  const reader = new Reader(readerClient, feed.url)
+
+  await reader.ready()
+
+  t.is(reader.config, null)
+  t.alike(reader.icon, null)
 })
 
 function tmpdir () {
