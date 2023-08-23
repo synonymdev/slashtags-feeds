@@ -43,9 +43,9 @@ declare class Feed {
      * Creates or updates an entry in the feed
      *
      * @param {string} key
-     * @param {Uint8Array | string} value - Uint8Array or a utf8 string
+     * @param {string | number | null | boolean | Array | Object | Uint8Array} value
      */
-    put(key: string, value: Uint8Array | string): Promise<void>;
+    put(key: string, value: string | number | null | boolean | any[] | any | Uint8Array): Promise<void>;
     /**
      * Read local entry
      *
