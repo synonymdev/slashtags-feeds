@@ -24,6 +24,7 @@ declare class Feed {
     });
     _client: import("@synonymdev/web-relay/types/lib/client/index");
     _dir: string;
+    _config: Config;
     _opened: Promise<[void, void]>;
     _url: string;
     get url(): string;
@@ -33,6 +34,10 @@ declare class Feed {
      */
     _normalizePath(path: string): string;
     /**
+     * @param {string} name
+     */
+    _normalizeField(name: string): string;
+    /**
      * Ensures that a config file `/slashfee.json` exists or creates it if not.
      *
      * @param {Config} [config]
@@ -40,26 +45,26 @@ declare class Feed {
      */
     _saveConfig(config?: Config, icon?: Uint8Array): Promise<[void, void]>;
     /**
-     * Creates or updates an entry in the feed
+     * Creates or updates a field in the feed
      *
-     * @param {string} key
+     * @param {string} name
      * @param {string | number | null | boolean | Array | Object | Uint8Array} value - Uint8Array or a utf8 string
      */
-    put(key: string, value: string | number | null | boolean | any[] | any | Uint8Array): Promise<void>;
+    put(name: string, value: string | number | null | boolean | any[] | any | Uint8Array): Promise<void>;
     /**
-     * Read local entry
+     * Read local field
      *
-     * @param {string} key
+     * @param {string} name
      * @returns {Promise<Uint8Array | null>}
      */
-    get(key: string): Promise<Uint8Array | null>;
+    get(name: string): Promise<Uint8Array | null>;
     /**
-    * Deletes an entry in the feed directory
+    * Deletes a field in the feed directory
     *
-    * @param {string} path
+    * @param {string} name
     * @returns {Promise<void>}
     */
-    del(path: string): Promise<void>;
+    del(name: string): Promise<void>;
     close(): Promise<void>;
 }
 declare namespace Feed {
@@ -77,8 +82,8 @@ type Config = {
     fields?: {
         [key: string]: any;
         name: string;
-        description?: "Bitcoin / US Dollar price history";
-        main: "/feed/BTCUSD-last";
+        description?: string;
+        main: string;
         files?: {
             [name: string]: string;
         };

@@ -45,14 +45,15 @@ const relay = new Relay(path.join(__dirname, '/storage/relay'));
   // may need to wait more for a the relay to get the files from the client in production.
   // await new Promise(resolve => settimeout(resolve, 200))
 
-  feed.put('BTCUSD-last', 1000000)
+  // Update a field, by its name in the config above.
+  feed.put('latest', 1000000)
 
   {
     const client = new Client({ storage: path.join(__dirname, '/storage/reader') })
     const reader = new Reader(client, feed.url)
 
     console.log('Config:', await reader.getConfig())
-    console.log('BTCUSD-last', await reader.getField('BTCUSD-last'))
+    console.log('BTCUSD-last', await reader.getField('latest'))
   }
 
   relay.close()

@@ -139,6 +139,39 @@ test('missing slashfeed.json', async (t) => {
   t.alike(reader.icon, null)
 })
 
+test('respect fields main path', async (t) => {
+  const relay = new Relay(tmpdir())
+  const address = await relay.listen()
+
+  // Handle spaes in feed names
+  const icon = b4a.from('icon data')
+  const config = { name: 'price feed 😇', icons: { 48: 'icon.png' }, fields: [{ name: 'FOO', main: '/custom/foo.json' }] }
+
+  const writerClient = new Client({ storage: tmpdir(), relay: address })
+  const feed = new Feed(writerClient, config, { icon })
+
+  await feed.put('FOO', 'foo')
+  await feed.put('bar', 'bar')
+
+  const readerClient = new Client({ storage: tmpdir() })
+  const reader = new Reader(readerClient, feed.url)
+
+  await sleep(100)
+
+  await reader.ready()
+
+  t.alike(reader.config, config)
+  t.alike(reader.icon, icon)
+
+  t.is(reader.config.fields[0].name, 'FOO')
+  t.is(reader.config.fields[0].main, '/custom/foo.json')
+
+  t.alike(await reader.getField('FOO'), 'foo', 'can respect field main path')
+  t.alike(await reader.getField('bar'), 'bar', 'can read without field')
+
+  relay.close()
+})
+
 function tmpdir () {
   return path.join(os.tmpdir(), Math.random().toString(16).slice(2))
 }
