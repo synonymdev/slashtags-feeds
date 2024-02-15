@@ -1,6 +1,6 @@
 # Slashtags Feeds
 
-A library for creating and managing feeds using Hyperdrive and Hyperswarm.
+A library for creating and managing feeds using the web-relay
 
 ## Usage
 
